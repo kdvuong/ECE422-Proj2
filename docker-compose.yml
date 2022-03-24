@@ -1,10 +1,22 @@
 version: '3'
 
 services:
-  web:
-    image: henaras/simpleweb:1
+  loadbalancer:
+    image: nginx
+    volumes:
+      - ./logs:/var/log/nginx
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
     ports:
-      - "8000:8000"
+      - "8080:80"
+    depends_on:
+      - web
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+  web:
+    image: c25vdw/simpleweb:latest
+    depends_on:
+      - redis
     deploy:
      resources:
         limits:

@@ -11,12 +11,14 @@ import time
 
 app = Flask(__name__)
 redis = Redis(host='redis', port=6379)
+counter = 0
 
 
 def difficult_function():
     output = 1
     t0 = time.time()
-    difficulty = random.randint(1000000, 2000000)
+    # difficulty = random.randint(1000000, 2000000)
+    difficulty = 1500000
     for i in range(difficulty):
         output = output * difficulty
         output = output / (difficulty - 1)
@@ -27,10 +29,18 @@ def difficult_function():
 
 @app.route('/')
 def hello():
+    global counter
+    counter += 1
     count = redis.incr('hits')
+    # time.sleep(5)
     computation_time = difficult_function()
-    return 'Hello There! I have been seen {} times. I have solved the problem in {} seconds.\n'.format(count,
+    return 'Hello There! I have been seen {} times. I have solved the problem in {} seconds.\n'.format(counter,
                                                                                                        computation_time)
+
+
+@app.route('/health')
+def health_check():
+    return "Healthy"
 
 
 if __name__ == "__main__":
