@@ -1,0 +1,76 @@
+<html>
+
+<head>
+    <title>Real Time Plots</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <h1>hello</h1>
+    <div>
+        <canvas id="workloads"></canvas>
+    </div>
+    <div>
+        <canvas id="response-times"></canvas>
+    </div>
+    <div>
+        <canvas id="replicas"></canvas>
+    </div>
+
+
+</body>
+<script type="module">
+    import { io } from "https://cdn.socket.io/4.3.2/socket.io.esm.min.js";
+    console.log("connecting...")
+    const socket = io();
+    const workloads = minuteLineChart("workload per minute", "workloads")
+    const responseTimes= minuteLineChart("avg response time", "response-times")
+    const replicas = minuteLineChart("replica count", "replicas")
+    socket.on("connect", () => {
+        // start charts
+        console.log("connected")
+
+        // interval to request chart update
+        setInterval(() => {
+            socket.emit("getPlotData")
+        }, 5000);
+        // listen for chart response
+        socket.on("plotData", (workloadsData, responseTimesData, replicasData) => {
+            console.log("workloadData: ", workloadsData, responseTimesData, replicasData)
+            updateChart(workloads, workloadsData)
+            updateChart(responseTimes, responseTimesData)
+            updateChart(replicas, replicasData)
+        })
+    })
+    function updateChart(chart, data) {
+        chart.data.datasets[0].data = data;
+        chart.update()
+    }
+    function minuteLineChart(title, id) {
+        const now = new Date();
+        const labels = [...Array(10).keys()].map(i => `${now.getHours()}:${now.getMinutes() - i}`);
+
+        const data = {
+            labels: labels,
+            datasets: [{
+                label: title,
+                backgroundColor: 'rgb(255, 99, 132)',
+                borderColor: 'rgb(255, 99, 132)',
+                data: [0, 10, 5, 2, 20, 30, 45],
+            }]
+        };
+
+        const config = {
+            type: 'line',
+            data: data,
+            options: {}
+        };
+
+        return new Chart(
+            document.getElementById(id),
+            config
+        );
+    }
+</script>
+
+</html>
