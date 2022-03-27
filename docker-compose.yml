@@ -52,7 +52,7 @@ services:
       - web
       - redis
     ports:
-      - "8080:8080"
+      - "8080:8001"
     deploy:
       placement:
         constraints: [node.role == manager]

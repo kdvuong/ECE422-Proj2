@@ -1,4 +1,5 @@
-from typing import List, Union, cast
+from datetime import datetime
+from typing import cast
 import docker
 import time
 import os
@@ -20,21 +21,23 @@ replicas = []
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-workload = []
-response_time = []
-replicas = []
+workload = [0] * 10
+response_time = [0] * 10
+replicas = [0] * 10
 plot_period = 10
+
+prev_response_update_ts = datetime.today()
+prev_workload_update_ts = datetime.today()
 
 @socketio.on('getPlotData')
 def get_plot_data():
     emit("plotData", (workload, response_time, replicas))
 
 def generate_plot_data():
-    global workload, response_time, replica
     while True:
-        start = time.time()
-        workload = workload_data(start)
-        response_time = response_time_data(start)
+        start = datetime.now()
+        workload_data(start)
+        response_time_data(start)
         time.sleep(plot_period)
 
 @app.route("/")
@@ -43,51 +46,63 @@ def index():
 
 @app.route("/toggle-autoscale")
 def toggle():
+    global active
+    active = not active
     if active:
-        active = False
+        return "autoscaler is now active"
     else:
-        active = True
-    return 200
+        return "autoscaler is now NOT active"
+
+def generate_time_ranges(start):
+    last_minute = start.timestamp() - start.second
+    res = []
+    if last_minute == start.timestamp():
+        for i in range(10, 0, -1):
+            res.append(last_minute - 60 * i)
+        res.append(last_minute)
+    else:
+        for i in range(9, 0, -1):
+            res.append(last_minute - 60 * i)
+        res.append(last_minute)
+        res.append(start.timestamp())
+    return res
 
 def workload_data(start):
+    global prev_workload_update_ts
     times = []
-    res = []
-    TEN_MINUTES_AGO = start - 600
+
     with open(nginx_log_path) as f:
         for line in f.readlines():
-            log_time, response_time = line.split()
-            if float(log_time) > TEN_MINUTES_AGO:
-                times.append(float(response_time))
-    for i in range(0, 10):
-        per_min = []
-        for t in times:
-            if t > TEN_MINUTES_AGO + 60 * i:
-                per_min.append(t)
-        if len(per_min) > 0:
-            res.append(len(per_min)/60)
-        else:
-            res.append(0)
-    return res
+            log_time, r = line.split()
+            if float(log_time) > prev_workload_update_ts.timestamp():
+                times.append(float(log_time))
+
+    if start.minute > prev_workload_update_ts.minute:
+        workload.append(len(times)/60)
+        workload.pop(0)
+        prev_workload_update_ts = start
+    else:
+        workload[-1] = len(times)/ (start.timestamp() - prev_workload_update_ts.timestamp())
 
 def response_time_data(start):
+    global prev_response_update_ts
     times = []
-    res = []
-    TEN_MINUTES_AGO = start - 600
+
     with open(nginx_log_path) as f:
         for line in f.readlines():
-            log_time, response_time = line.split()
-            if float(log_time) > TEN_MINUTES_AGO:
-                times.append(float(response_time))
-    for i in range(0, 10):
-        per_min = []
-        for t in times:
-            if t > TEN_MINUTES_AGO + 60 * i:
-                per_min.append(t)
-        if len(per_min) > 0:
-            res.append(sum(per_min)/len(per_min))
+            log_time, r = line.split()
+            if float(log_time) > prev_response_update_ts.timestamp():
+                times.append(float(r))
+
+    if start.minute > prev_response_update_ts.minute:
+        if len(times) > 0:
+            response_time.append(sum(times)/len(times))
         else:
-            res.append(0)
-    return res
+            response_time.append(0)
+        response_time.pop(0)
+        prev_response_update_ts = start
+    elif len(times) > 0:
+        response_time[-1] = sum(times)/len(times)
 
 def generate_replica_data():
     while True:
@@ -138,7 +153,6 @@ def run():
                 print(f"scale down to {current_replica / 2}")
                 current_replica = scale_service(service, int(current_replica / 2))
 
-
 if __name__ == "__main__":
     import threading
     log_listener = threading.Thread(target=run)
@@ -147,4 +161,4 @@ if __name__ == "__main__":
     plot_generator.start()
     replica_data_generator = threading.Thread(target=generate_replica_data)
     replica_data_generator.start()
-    socketio.run(app, port=os.getenv("PORT", 8080))
+    socketio.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8001)), debug=True)

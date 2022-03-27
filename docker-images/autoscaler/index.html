@@ -41,14 +41,28 @@
             updateChart(responseTimes, responseTimesData)
             updateChart(replicas, replicasData)
         })
+
+        setInterval(() => {
+            const now = new Date();
+            const labels = [...Array(10).keys()].map(i => `${now.getHours()}:${now.getMinutes() - i}`).reverse();
+            updateChart(workloads, null, labels)
+            updateChart(responseTimes, null, labels)
+            updateChart(replicas, null, labels)
+        }, 10000)
     })
-    function updateChart(chart, data) {
-        chart.data.datasets[0].data = data;
+    function updateChart(chart, data, labels = []) {
+        if (data && data.length > 0) {
+            chart.data.datasets[0].data = data;
+        }
+        if (labels && labels.length > 0) {
+            chart.data.labels = labels
+        }
         chart.update()
+
     }
     function minuteLineChart(title, id) {
         const now = new Date();
-        const labels = [...Array(10).keys()].map(i => `${now.getHours()}:${now.getMinutes() - i}`);
+        const labels = [...Array(10).keys()].map(i => `${now.getHours()}:${now.getMinutes() - i}`).reverse();
 
         const data = {
             labels: labels,
